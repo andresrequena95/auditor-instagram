@@ -1,0 +1,67 @@
+/* Paleta: identidad visual de Andrés Requena (5-marca/identidad-visual.md)
+   navy #1B2A4A · ivory #FAF7F3 · clay #A87B5C · steel #8A9BB5 · linen #EDE8E2 · smoke #2E2926
+   clay-deep es clay oscurecido para texto chico y botones (el clay puro no llega a contraste AA sobre ivory) */
+:root{--crema:#FAF7F3;--crema2:#EDE8E2;--marron:#1B2A4A;--marron2:rgba(27,42,74,.74);--dorado:#A87B5C;--dorado2:#8A9BB5;--clay-deep:#8A6046;--blanco:#FFFFFF;--rojo:#8A6046;--humo:#2E2926;--r:16px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--crema);color:var(--marron);font:17px/1.55 'Founders Grotesk','Helvetica Neue',Avenir,Arial,sans-serif}
+h1,h2,h3,.kpi b,.privacy strong,.bench .cols b{font-family:'Tiempos Headline',Georgia,'Iowan Old Style',serif;font-weight:700}
+.btn,label,summary,.tag{font-family:'Founders Grotesk','Helvetica Neue',Avenir,Arial,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+header.hero{padding:44px 0 28px;text-align:center}
+.tag{display:inline-block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--clay-deep);font-weight:700}
+h1{font-size:clamp(28px,7vw,44px);line-height:1.12;margin:10px 0 14px}
+.lead{font-size:19px;color:var(--marron2);margin:0 auto 18px;max-width:600px}
+.privacy{background:var(--marron);color:var(--crema);border-radius:var(--r);padding:18px 20px;text-align:center;margin:20px 0}
+.privacy strong{display:block;font-size:clamp(20px,5vw,28px);line-height:1.2;color:var(--crema)}
+.privacy span{font-size:15px;opacity:.9}
+.card{background:var(--blanco);border:1px solid var(--crema2);border-radius:var(--r);padding:20px;margin:18px 0;box-shadow:0 2px 10px rgba(59,42,30,.05)}
+.drop{border:2px dashed var(--dorado);border-radius:var(--r);padding:32px 16px;text-align:center;background:var(--blanco);cursor:pointer;transition:.15s}
+.drop.over{background:var(--crema2);border-style:solid}
+.drop p{margin:6px 0}
+.btn{display:inline-block;background:var(--marron);color:var(--crema);border:0;border-radius:999px;padding:13px 24px;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none}
+.btn:hover{background:#2a3d66}
+.btn.gold{background:var(--clay-deep);color:#fff}
+.btn.gold:hover{background:#744f39}
+.btn.ghost{background:transparent;color:var(--marron);border:1.5px solid var(--marron)}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:12px}
+details{background:var(--blanco);border:1px solid var(--crema2);border-radius:var(--r);padding:14px 18px;margin:14px 0}
+summary{cursor:pointer;font-weight:700}
+details ol{padding-left:20px;margin:12px 0 0}
+details li{margin:6px 0}
+.note{font-size:14px;color:var(--marron2)}
+h2{font-size:clamp(22px,5vw,30px);margin:32px 0 10px}
+#status{margin:12px 0;text-align:center;color:var(--marron2)}
+#status.err{color:var(--clay-deep);font-weight:600}
+#owner-box{display:none;margin:10px 0;font-size:15px}
+select{font:inherit;max-width:100%;padding:6px 10px;border-radius:8px;border:1px solid var(--dorado);background:var(--blanco);color:var(--marron)}
+#report{display:none}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kpi{background:var(--blanco);border:1px solid var(--crema2);border-radius:var(--r);padding:16px;text-align:center}
+.kpi b{display:block;font-size:clamp(24px,6vw,34px);color:var(--clay-deep)}
+.kpi span{font-size:13px;color:var(--marron2)}
+.bar{display:grid;grid-template-columns:118px 1fr 104px;gap:10px;align-items:center;margin:10px 0;font:14px 'Founders Grotesk','Helvetica Neue',Avenir,Arial,sans-serif}
+.bar .track{background:var(--crema2);border-radius:99px;height:16px;overflow:hidden}
+.bar .fill{height:100%;background:var(--marron);border-radius:99px;min-width:2px}
+.bar.bad .fill{background:var(--dorado)}
+.bar.hl .fill{background:var(--dorado)}
+.bar .v{text-align:right;font-weight:700;line-height:1.15}
+.bar .v small{display:block;font-weight:400;color:var(--marron2);font-size:12px}
+.bar em{display:block;font-style:normal;font-size:11px;color:var(--clay-deep)}
+.bar.small{opacity:.5}
+.worst{background:var(--crema2);border-left:5px solid var(--dorado);padding:12px 16px;border-radius:8px;margin:0 0 12px}
+#continuidad .worst{margin:14px 0 8px}
+.bench{background:var(--marron);color:var(--crema);border-radius:var(--r);padding:20px}
+.bench h3{margin:0 0 8px;color:var(--dorado2)}
+.bench .note{color:var(--crema)}
+.bench .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin:12px 0}
+.bench .cols b{display:block;font-size:30px;color:var(--dorado)}
+.bench .cols span{font-size:13px}
+.cta{background:var(--blanco);border:2px solid var(--dorado);border-radius:var(--r);padding:24px 20px;text-align:center}
+.cta h2{margin-top:0}
+form.mail{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+form.mail input{flex:1 1 220px;padding:13px 14px;border-radius:999px;border:1.5px solid var(--marron);font:16px inherit;font-family:inherit;background:var(--blanco);color:var(--marron)}
+#mail-msg{width:100%;font-size:14px;margin-top:6px;text-align:left}
+footer{padding:36px 0 48px;text-align:center;font-size:13px;color:var(--marron2)}
+@media(min-width:640px){.kpis{grid-template-columns:repeat(4,1fr)}.bar{grid-template-columns:160px 1fr 112px}}
+.bench .cols span b{display:inline;font:inherit;color:inherit;font-weight:700}

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es-PE">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>¿Cuánto demoras en responder a tus clientes?</title>
+<meta name="description" content="Auditor gratuito: descubre cuánto demoras en responder los chats de Instagram de tu negocio. Tus chats no salen de tu computadora.">
+<link rel="stylesheet" href="styles.css?v=4">
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <span class="tag">Auditor gratuito · Instagram</span>
+    <h1>¿Cuánto demoras en responder a tus clientes?</h1>
+    <p class="lead">Sube tu export de mensajes de Instagram y en segundos ves tu tiempo real de respuesta, cuántos chats se quedaron sin contestar y a qué hora más demoras.</p>
+    <div class="privacy">
+      <strong>🔒 Tus chats no salen de tu computadora</strong>
+      <span>Todo se calcula en tu computadora, dentro de tu navegador. El archivo nunca se sube a ningún servidor.</span>
+    </div>
+  </header>
+
+  <details>
+    <summary>¿Cómo descargo mis mensajes de Instagram?</summary>
+    <p class="note">Lo más cómodo es hacerlo desde el computador (en el celular también se puede). Los nombres de los menús cambian seguido; si alguno no coincide, busca la palabra <i>exportar</i>.</p>
+    <ol>
+      <li>Entra a <b>instagram.com</b> con la cuenta del negocio. Ve a tu perfil, abre el menú de opciones (⚙) → <b>Configuración y privacidad</b> y entra a la <b>Cuenta de Meta</b> (el antiguo Centro de cuentas).</li>
+      <li>En el menú de la izquierda elige <b>Tu información y permisos</b> → <b>Exportar tu información</b> y toca <b>Crear exportación</b>.</li>
+      <li>Elige la cuenta de Instagram del negocio y marca solo <b>Mensajes</b>.</li>
+      <li>Elige <b>Exportar al dispositivo</b>, rango de fechas <b>Desde siempre</b> (o los últimos meses) y formato <b>JSON</b> (no HTML).</li>
+      <li>Meta te pide tu contraseña de nuevo, <i>“Por tu seguridad, vuelve a ingresar la contraseña”</i>. Confirma.</li>
+      <li>Te llega un correo de Meta: primero <i>“Tu solicitud de descarga de Meta está…”</i> y, cuando esté listo, <b>“Ya puedes descargar tu información de Meta”</b>. En mi caso llegó unos 20 minutos después; en cuentas con muchos chats puede tardar más.</li>
+      <li>Abre el enlace del correo (o vuelve a <i>Exportar tu información</i> → <b>Descargas disponibles</b>), entra a <b>Descarga tus archivos</b> y toca <b>Download</b> en cada archivo. Meta lo parte en varios (a mí me salieron <b>Archivo 1 de 2</b> y <b>Archivo 2 de 2</b>, de 1,9 GB y 2,4 GB).</li>
+    </ol>
+    <p class="note">⏳ Tienes <b>4 días</b> para descargarlo; pasado ese plazo hay que pedirlo otra vez. Cuando termine, vuelve aquí y arrastra <b>todos los ZIP juntos</b>, tal como se descargaron: no hace falta descomprimir nada. Tu navegador lee solo los mensajes y se salta fotos y videos, así que pesen lo que pesen funciona (con 4 GB puede tardar un par de minutos).</p>
+    <p class="note">En el celular es casi igual: Instagram → tu perfil → menú → <b>Configuración y privacidad</b> → <b>Cuenta de Meta</b> → <b>Tu información y permisos</b> → <b>Exportar tu información</b>. Si lo descargas ahí, pásalo a tu computador para analizarlo.</p>
+  </details>
+
+  <section class="card" style="padding:0;border:0;background:none;box-shadow:none">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Arrastra tu archivo aquí o haz clic para elegirlo">
+      <p style="font-size:34px;margin:0">📂</p>
+      <p><b>Arrastra aquí tus ZIP (todos juntos) o tus archivos JSON</b></p>
+      <p class="note">Alternativa: si ya descomprimiste, suelta la carpeta <i>messages</i></p>
+      <div class="row">
+        <button class="btn" type="button" id="pick">Elegir archivo</button>
+        <button class="btn ghost" type="button" id="pick-dir">Elegir carpeta</button>
+        <button class="btn ghost" type="button" id="demo">Ver con datos de ejemplo</button>
+      </div>
+    </div>
+    <input type="file" id="file" accept=".zip,.json,application/zip,application/json" multiple hidden>
+    <input type="file" id="dir" webkitdirectory hidden>
+    <div id="status" role="status" aria-live="polite"></div>
+    <div id="owner-box"></div>
+  </section>
+
+  <section id="report" aria-live="polite">
+    <h2>Tu reporte</h2>
+    <p class="note" id="scope"></p>
+    <div class="kpis" id="kpis"></div>
+
+    <h2>¿En cuánto tiempo respondes?</h2>
+    <div class="card" id="tramos"></div>
+
+    <h2>¿Cuántos siguieron la conversación según tu velocidad?</h2>
+    <div class="card" id="continuidad"></div>
+
+    <h2>¿A qué hora te escriben más?</h2>
+    <div class="card" id="horas-escriben"></div>
+
+    <h2>¿A qué hora demoras más en responder?</h2>
+    <div class="card" id="horas-demoras"></div>
+
+    <div class="bench" style="margin-top:22px">
+      <h3>Por qué importa la velocidad</h3>
+      <p style="margin:0">Caso real: en mi negocio analizamos <b>399 conversaciones de WhatsApp</b> del equipo de ventas de Mono Kids. Esto pasó con los leads según lo rápido que respondimos:</p>
+      <div class="cols">
+        <div><b>77%</b><span>continúa la conversación si respondes en <b>menos de 15 min</b></span></div>
+        <div><b>62%</b><span>si respondes entre <b>16 min y 1 h</b></span></div>
+        <div><b>38%</b><span>si respondes en <b>más de 12 h</b></span></div>
+      </div>
+      <p class="note" style="margin:0;color:inherit;opacity:.8">Esas cifras son de WhatsApp, no de Instagram. La curva de más arriba sí sale de tus propios chats.</p>
+    </div>
+
+    <div class="cta" style="margin-top:22px">
+      <h2>Esto es lo que un asistente de ventas con IA te ayuda a no dejar pasar</h2>
+      <p>Responde al instante, a cualquier hora, con tu forma de vender. Tú te quedas con los clientes listos para cerrar.</p>
+      <!-- TODO: reemplazar href="#" por el link de Hotmart de "Crea tu asistente de ventas con IA" -->
+      <a class="btn gold" id="cta-hotmart" href="#">Quiero crear mi asistente de ventas con IA</a>
+      <form class="mail" id="mail-form" novalidate>
+        <input type="email" id="mail" placeholder="tu@correo.com" autocomplete="email" aria-label="Tu correo">
+        <button class="btn" type="submit">Te mando el plan de acción</button>
+        <div id="mail-msg" class="note"></div>
+      </form>
+    </div>
+  </section>
+
+  <footer>Hecho por Andrés Requena · Todo se calcula en tu navegador; no guardamos tus chats.</footer>
+</div>
+
+<script src="analyzer.js?v=4"></script>
+<script src="sample-data.js?v=4"></script>
+<script src="app.js?v=4"></script>
+</body>
+</html>
