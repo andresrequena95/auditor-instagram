@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>¿Cuánto demoras en responder a tus clientes?</title>
 <meta name="description" content="Auditor gratuito: descubre cuánto demoras en responder los chats de Instagram de tu negocio. Tus chats no salen de tu computadora.">
-<link rel="stylesheet" href="styles.css?v=7">
+<link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
 <div class="wrap">
@@ -86,6 +86,15 @@
     <div class="card" id="export-box">
       <p class="lead-note" style="margin:0 0 12px">Descarga el Excel con <b>una fila por conversación</b>: contacto, de dónde llegó (anuncio u orgánico), cuánto demoraste, si siguió la conversación, si había interés… Fíltralo y cuenta tú mismo cuántos vienen de pauta, cuántos de orgánico y todo lo demás. Trae una hoja “Resumen” con cada conteo como fórmula, para comprobar el reporte.</p>
       <button class="btn" type="button" id="export-btn">Descargar el Excel con tus datos</button>
+      <form class="gate" id="gate-form" style="display:none" novalidate>
+        <p class="note" style="margin:14px 0 10px">Te pido tu correo para enviarte, de vez en cuando, consejos para responder mejor a tus leads. El Excel se genera en <b>tu computadora</b>: lo único que viaja es tu correo, nada de tus chats.</p>
+        <div class="gate-row">
+          <label for="gate-mail" class="gate-label">Tu correo</label>
+          <input type="email" id="gate-mail" name="email" autocomplete="email" placeholder="tu@correo.com" required>
+          <button class="btn gold" type="submit">Desbloquear mi Excel</button>
+        </div>
+        <p class="note" style="margin:8px 0 0;min-height:1.2em" id="gate-msg" role="status" aria-live="polite"></p>
+      </form>
       <p class="note" style="margin:10px 0 0" id="export-msg">🔒 El archivo se genera en tu computadora y no viaja a ningún servidor. Contiene los nombres de tus clientes: es tu información, guárdalo donde quieras.</p>
     </div>
 
@@ -116,9 +125,9 @@
   <footer>Hecho por Andrés Requena · Todo se calcula en tu navegador; no guardamos tus chats.</footer>
 </div>
 
-<script src="analyzer.js?v=7"></script>
-<script src="exporter.js?v=7"></script>
-<script src="sample-data.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="analyzer.js?v=8"></script>
+<script src="exporter.js?v=8"></script>
+<script src="sample-data.js?v=8"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>

@@ -1,5 +1,9 @@
 (function () {
   'use strict';
+  // Google Form "Auditor Instagram - correos del Excel" (publicado). Solo recibe el correo.
+  var GATE_ENDPOINT = 'https://docs.google.com/forms/d/e/1FAIpQLSf1lu_E1J2mrLo8qmOx0nCf5jC8S4D9wQUjj671F23HJ2CvEg/formResponse';
+  var GATE_ENTRY = 'entry.1053466469'; // campo "correo" de ese mismo Form
+  var GATE_KEY = 'auditor_excel_email';
   var A = window.Auditor, $ = function (id) { return document.getElementById(id); };
   var state = { result: null, convs: null, detect: null, failed: 0, cands: [], botKeys: null, ownerOpen: false, owner: null };
 
@@ -264,7 +268,7 @@
     a.href = url; a.download = name; document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1500);
   }
-  $('export-btn').onclick = function () {
+  function doExport() {
     var r = state.result, msg = $('export-msg');
     if (!r) return;
     try {
@@ -277,6 +281,32 @@
         msg.textContent = 'No pude armar el .xlsx, así que te descargué un CSV con las mismas columnas (ábrelo con Excel o Google Sheets). Sigue siendo local: no viajó a ningún servidor.';
       } catch (e2) { msg.textContent = 'No pude generar el archivo en este navegador. Prueba con Chrome o Edge actualizado.'; }
     }
+  }
+
+  // Email gate: el correo se registra en el Form; el Excel se sigue generando local.
+  function savedMail() { try { return localStorage.getItem(GATE_KEY) || ''; } catch (e) { return ''; } }
+  function sendMail(mail) {
+    try {
+      var body = new URLSearchParams(); body.append(GATE_ENTRY, mail);
+      var p = fetch(GATE_ENDPOINT, { method: 'POST', mode: 'no-cors', body: body.toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      if (p && p.catch) p.catch(function () { /* da igual: la descarga ya se desbloqueó */ });
+    } catch (e) { /* sin red o bloqueado: se desbloquea igual */ }
+  }
+  $('export-btn').onclick = function () {
+    if (!state.result) return;
+    if (savedMail()) { doExport(); return; }
+    $('gate-form').style.display = 'block';
+    $('gate-mail').focus();
+  };
+  $('gate-form').onsubmit = function (e) {
+    e.preventDefault();
+    var v = $('gate-mail').value.trim(), gm = $('gate-msg');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { gm.textContent = 'Revisa tu correo: parece que le falta algo (por ejemplo, tu@correo.com).'; return; }
+    gm.textContent = '';
+    sendMail(v);
+    try { localStorage.setItem(GATE_KEY, v); } catch (err) { /* sin storage: seguimos */ }
+    $('gate-form').style.display = 'none';
+    doExport();
   };
 
   // Eventos de carga
