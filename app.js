@@ -128,7 +128,7 @@
         '<div class="vs-b"><b>' + A.fmtDuration(r.medianMin) + '</b><span>en lo que responde una persona</span></div></div>' +
         '<p class="lead-note">Tu bot responde en <b>' + A.fmtSeconds(b.medianSec) + '</b>, pero eso no es atención: el cliente recibe un menú, no a alguien que lo ayude. ' +
         'El bot intervino en <b>' + b.chatsWithBot.toLocaleString('es-PE') + ' de ' + r.analyzed.toLocaleString('es-PE') + ' chats</b> (' + pct(b.chatsWithBotPct) + '). ' +
-        (b.medianWithBotMin !== null ? 'Si lo cuentas como respuesta, tu mediana parece de <b>' + A.fmtDuration(b.medianWithBotMin) + '</b>; la real, la de una persona, es <b>' + A.fmtDuration(r.medianMin) + '</b>.' : '') + '</p>';
+        (b.medianWithBotMin !== null ? 'Si lo cuentas como respuesta, tu tiempo típico parece de <b>' + A.fmtDuration(b.medianWithBotMin) + '</b>; el real, el de una persona, es <b>' + A.fmtDuration(r.medianMin) + '</b>.' : '') + '</p>';
     }
     html += '<p class="note" style="margin:' + (b.active ? '14px' : '0') + ' 0 8px">Detecté <b>' + b.candidates.length + (b.candidates.length === 1 ? ' mensaje automático' : ' mensajes automáticos') + '</b> en tu cuenta: textos que repites idénticos en 10 chats o más y que salen en segundos tras el mensaje del cliente. Cada cuenta es distinta: <b>desmarca los que en realidad escribe una persona</b> y recalculo al toque.</p><ul class="botlist">';
     b.candidates.forEach(function (c, i) {
@@ -152,7 +152,7 @@
         '<div><b>' + d.n.toLocaleString('es-PE') + '</b><span>' + (extra && extra.l1 || 'llegaron') + '</span></div>' +
         '<div><b>' + (d.answeredPct === null || d.answeredPct === undefined ? '—' : pct(d.answeredPct)) + '</b><span>' + (d.answered !== undefined ? d.answered.toLocaleString('es-PE') + ' con respuesta de una persona' : 'a los que respondió una persona') + '</span></div>' +
         '<div><b>' + (d.continuedPct === null || d.continuedPct === undefined ? '—' : pct(d.continuedPct)) + '</b><span>siguieron la conversación</span></div>' +
-        '<div><b>' + (d.median === null || d.median === undefined ? '—' : A.fmtDuration(d.median)) + '</b><span>mediana de espera a una persona</span></div></div></div>';
+        '<div><b>' + (d.median === null || d.median === undefined ? '—' : A.fmtDuration(d.median)) + '</b><span>espera típica hasta que responde una persona</span></div></div></div>';
     }
     var subOrg = [];
     if (o.organico.directo) subOrg.push(o.organico.directo + ' directos');
@@ -167,13 +167,13 @@
     // lectura automatica
     var read = '';
     if (o.pauta.n && o.organico.n && o.pauta.median !== null) {
-      read = 'El <b>' + pct(o.pauta.pct) + '</b> de tus leads viene de pauta y espera una mediana de <b>' + A.fmtDuration(o.pauta.median) + '</b> a una persona' +
+      read = 'El <b>' + pct(o.pauta.pct) + '</b> de tus leads viene de pauta y típicamente espera <b>' + A.fmtDuration(o.pauta.median) + '</b> a una persona' +
         (o.organico.median !== null ? ' (los orgánicos, <b>' + A.fmtDuration(o.organico.median) + '</b>)' : '') + '.' +
         (o.pauta.continuedPct !== null && o.organico.continuedPct !== null && o.pauta.continuedPct < o.organico.continuedPct - 3 ? ' Y de los de pauta sigue la conversación el <b>' + pct(o.pauta.continuedPct) + '</b>, contra <b>' + pct(o.organico.continuedPct) + '</b> en los orgánicos.' : '');
     } else if (o.pauta.n && o.pauta.median !== null) {
-      read = 'El <b>' + pct(o.pauta.pct) + '</b> de tus leads viene de pauta y espera una mediana de <b>' + A.fmtDuration(o.pauta.median) + '</b> a una persona.';
+      read = 'El <b>' + pct(o.pauta.pct) + '</b> de tus leads viene de pauta y típicamente espera <b>' + A.fmtDuration(o.pauta.median) + '</b> a una persona.';
     } else if (o.organico.n && o.organico.median !== null) {
-      read = 'Todos tus leads llegan de forma orgánica y esperan una mediana de <b>' + A.fmtDuration(o.organico.median) + '</b> a una persona.';
+      read = 'Todos tus leads llegan de forma orgánica y típicamente esperan <b>' + A.fmtDuration(o.organico.median) + '</b> a una persona.';
     }
     wrap.style.display = rows.length ? 'block' : 'none';
     $('origen').innerHTML = (read ? '<div class="worst">' + read + '</div>' : '') + rows.join('') +
@@ -201,7 +201,7 @@
     var hum = r.bot.active;
     var k = [
       [A.fmtDuration(r.meanMin), 'Tiempo promedio de 1ª respuesta' + (hum ? ' humana' : '') + ' (sobre ' + chats(r.answered) + ' respondidos)'],
-      [A.fmtDuration(r.medianMin), hum ? 'Tu mediana humana (el caso típico)' : 'Mediana (el caso típico)'],
+      [A.fmtDuration(r.medianMin), 'Tu tiempo típico de respuesta' + (hum ? ' humana' : '') + ' (la mitad de tus clientes esperó más que esto)'],
       [Math.round(r.unansweredPct) + '%', r.unanswered + ' de ' + chats(r.analyzed) + ' sin respuesta' + (hum ? ' de una persona' : '')],
       [r.continuedPct === null ? '—' : Math.round(r.continuedPct) + '%', r.continued + ' de ' + chats(r.answered) + ' siguieron la conversación tras tu respuesta']
     ];
@@ -244,14 +244,14 @@
     var maxMed = Math.max.apply(null, r.franjas.map(function (f) { return f.median || 0; })) || 1;
     var advice = '';
     if (wz) {
-      advice = '<div class="worst">Tu punto ciego es la <b>' + wz.short + '</b>: ahí demoras una mediana de <b>' + A.fmtDuration(wz.median) + '</b> en responder (' + wz.answered + ' chats respondidos)' +
+      advice = '<div class="worst">Tu punto ciego es la <b>' + wz.short + '</b>: ahí demoras típicamente <b>' + A.fmtDuration(wz.median) + '</b> en responder (' + wz.answered + ' chats respondidos)' +
         (wz.unanswered ? ' y ' + chats(wz.unanswered) + ' se quedaron sin respuesta' : '') + '. Ahí se te van los leads' +
         (bz && bz.id === wz.id ? ', y además es cuando más te escriben' : '') + '.</div>';
     }
     $('horas-demoras').innerHTML = advice + r.franjas.map(function (f) {
       var txt = f.median === null ? '— <small>0 respondidos</small>' : A.fmtDuration(f.median) + ' <small>' + f.answered + ' de ' + f.total + ' respondidos</small>';
       return bar(f.label, f.median ? f.median / maxMed * 100 : 0, txt, { bad: wz && f.id === wz.id, small: f.median !== null && f.small });
-    }).join('') + '<p class="note">Mediana de la 1ª respuesta según la hora en que te escribió el cliente. Las franjas con menos de ' + A.MIN_N + ' chats respondidos salen atenuadas.</p>';
+    }).join('') + '<p class="note">Tiempo típico de la 1ª respuesta según la hora en que te escribió el cliente. Las franjas con menos de ' + A.MIN_N + ' chats respondidos salen atenuadas.</p>';
 
     var rep = $('report'); rep.style.display = 'block';
     if (scroll !== false && !window.__NO_SCROLL) rep.scrollIntoView({ behavior: 'smooth' });
