@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   var A = window.Auditor, $ = function (id) { return document.getElementById(id); };
-  var state = { convs: null, detect: null, failed: 0, cands: [], botKeys: null, ownerOpen: false, owner: null };
+  var state = { result: null, convs: null, detect: null, failed: 0, cands: [], botKeys: null, ownerOpen: false, owner: null };
 
   function status(msg, err) { var s = $('status'); s.textContent = msg || ''; s.className = err ? 'err' : ''; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -55,7 +55,7 @@
   }
 
   async function handleFiles(files) {
-    state.convs = null; state.failed = 0; $('report').style.display = 'none'; $('owner-box').style.display = 'none';
+    state.convs = null; state.result = null; state.failed = 0; $('report').style.display = 'none'; $('owner-box').style.display = 'none';
     if (!files.length) return;
     status('Leyendo tus mensajes en tu navegador…');
     try { handleEntries(await entriesFromFiles(files)); }
@@ -253,9 +253,31 @@
       return bar(f.label, f.median ? f.median / maxMed * 100 : 0, txt, { bad: wz && f.id === wz.id, small: f.median !== null && f.small });
     }).join('') + '<p class="note">Tiempo típico de la 1ª respuesta según la hora en que te escribió el cliente. Las franjas con menos de ' + A.MIN_N + ' chats respondidos salen atenuadas.</p>';
 
+    state.result = r;
     var rep = $('report'); rep.style.display = 'block';
     if (scroll !== false && !window.__NO_SCROLL) rep.scrollIntoView({ behavior: 'smooth' });
   }
+
+  // Descarga del Excel (se arma en el navegador; nada sale de la computadora)
+  function saveBlob(blob, name) {
+    var a = document.createElement('a'), url = URL.createObjectURL(blob);
+    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1500);
+  }
+  $('export-btn').onclick = function () {
+    var r = state.result, msg = $('export-msg');
+    if (!r) return;
+    try {
+      var bytes = window.Exporter.buildXlsx(window.Exporter.buildSheets(r, A));
+      saveBlob(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), window.Exporter.fileName('xlsx'));
+      msg.textContent = '✅ Listo: se descargaron ' + r.rows.length.toLocaleString('es-PE') + ' filas (una por conversación). Se generó en tu computadora; no viajó a ningún servidor. En la hoja “Resumen” están los conteos como fórmula.';
+    } catch (err) {
+      try {
+        saveBlob(new Blob([window.Exporter.toCsv(r, A)], { type: 'text/csv;charset=utf-8' }), window.Exporter.fileName('csv'));
+        msg.textContent = 'No pude armar el .xlsx, así que te descargué un CSV con las mismas columnas (ábrelo con Excel o Google Sheets). Sigue siendo local: no viajó a ningún servidor.';
+      } catch (e2) { msg.textContent = 'No pude generar el archivo en este navegador. Prueba con Chrome o Edge actualizado.'; }
+    }
+  };
 
   // Eventos de carga
   var drop = $('drop'), fileIn = $('file'), dirIn = $('dir');

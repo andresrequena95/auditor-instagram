@@ -117,6 +117,42 @@
   var PHONE_RE = /(\+?51[\s-]?)?\b9\d{2}[\s-]?\d{3}[\s-]?\d{3}\b/;
   var COMMIT_RE = /ahi te escribo|ahí te escribo|te contacto de este tel|te escribo por whatsapp|te escribo al/i;
 
+  // ---------- Filas del Excel (una por conversacion) ----------
+  var ORIGEN = { pauta: 'Anuncio', directo: 'Orgánico — directo', story: 'Orgánico — story', post: 'Orgánico — post compartido', tu: 'Tú escribiste primero', sol: 'Solicitud' };
+  var COLUMNS = [
+    { key: 'contacto', title: 'Contacto', width: 26 },
+    { key: 'fecha', title: 'Fecha y hora del primer mensaje del cliente', width: 20 },
+    { key: 'origen', title: 'Origen', width: 26 },
+    { key: 'primerMsg', title: 'Primer mensaje del cliente', width: 44 },
+    { key: 'bot', title: '¿Respondió el bot?', width: 12 },
+    { key: 'minutos', title: 'Minutos hasta la 1ª respuesta de una persona', width: 18 },
+    { key: 'tramo', title: 'Tramo de respuesta', width: 18 },
+    { key: 'franja', title: 'Franja horaria de llegada', width: 24 },
+    { key: 'siguio', title: '¿Siguió la conversación?', width: 14 },
+    { key: 'msgsCliente', title: 'Mensajes del cliente', width: 11 },
+    { key: 'msgsTuyos', title: 'Mensajes tuyos (personas)', width: 11 },
+    { key: 'interes', title: '¿Señal de interés?', width: 18 },
+    { key: 'seguimientos', title: 'Seguimientos tuyos tras su último mensaje', width: 16 },
+    { key: 'oportunidad', title: '¿Oportunidad abandonada?', width: 14 },
+    { key: 'ultimaFecha', title: 'Fecha y hora del último mensaje', width: 20 },
+    { key: 'ultimoDe', title: 'Último mensaje de', width: 12 }
+  ];
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function fmtDT(ts) {
+    if (ts === null || ts === undefined) return '';
+    var d = new Date(ts);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+  function cut(t, n) { t = String(t || ''); return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t; }
+  function reqName(c, owner) {
+    if (c.title) return c.title;
+    for (var i = 0; i < c.participants.length; i++) if (c.participants[i] !== owner) return c.participants[i];
+    return '(sin nombre)';
+  }
+  function emptyRow() {
+    var r = {}; COLUMNS.forEach(function (c) { r[c.key] = ''; }); return r;
+  }
+
   function norm(t) { return String(t || '').replace(/\s+/g, ' ').trim(); }
   function shortText(t, n) {
     var w = t.split(' ');
@@ -198,6 +234,7 @@
     var origins = { pauta: newOrigin(), organico: newOrigin(), tu: { n: 0, replied: 0 } };
     var botSecs = [], anyMins = [], chatsWithBot = 0;
     var leads = []; // para el conteo de oportunidades
+    var rows = [];  // una fila por conversacion, para el Excel
     var pre = [];   // chats comparables, para detectar los botones del anuncio
 
     convs.forEach(function (c) {
@@ -208,14 +245,24 @@
     // Pasada 1: filtros por tipo de conversacion y clasificacion
     convs.forEach(function (c) {
       // Solicitudes de mensaje sin aceptar y canales de difusion no cuentan como "chats atendidos"
-      if (c.source === 'message_requests') { pendingRequests++; return; }
+      if (c.source === 'message_requests') {
+        pendingRequests++;
+        var rq = prep(c, owner).msgs, rr = emptyRow(), fc = null;
+        rq.forEach(function (x) { if (!x.o && !fc) fc = x; });
+        rr.contacto = reqName(c, owner); rr.origen = ORIGEN.sol;
+        rr.fecha = fc ? fmtDT(fc.ts) : ''; rr.primerMsg = fc ? (fc.text ? cut(fc.text, 80) : '(foto, audio o sticker)') : '';
+        rr.msgsCliente = rq.filter(function (x) { return !x.o; }).length; rr.msgsTuyos = rq.filter(function (x) { return x.o; }).length;
+        if (rq.length) { rr.ultimaFecha = fmtDT(rq[rq.length - 1].ts); rr.ultimoDe = rq[rq.length - 1].o ? 'Tú' : 'Cliente'; }
+        rr._ts = rq.length ? rq[0].ts : c.messages.length ? c.messages[0].ts : 0;
+        rows.push(rr); return;
+      }
       if (c.source === 'broadcast') { skippedChannels++; return; }
       var others = {};
       c.messages.forEach(function (m) { if (m.sender !== owner) others[m.sender] = 1; });
       if (Object.keys(others).length > 1 || c.participants.length > 2) { skippedGroups++; return; }
       var p = prep(c, owner);
       if (!p.msgs.length) return;
-      pre.push({ msgs: p.msgs, adLine: p.adLine, k: classify(p.msgs, botSet) });
+      pre.push({ msgs: p.msgs, adLine: p.adLine, k: classify(p.msgs, botSet), name: reqName(c, owner) });
     });
 
     // Botones del anuncio: primer mensaje del cliente (en >=10 chats) al que el bot responde en segundos
@@ -239,10 +286,11 @@
       var last = m[m.length - 1];
 
       // oportunidades: sobre cualquier chat donde el cliente escribio, sin importar quien abrio
+      var L = null;
       if (ci >= 0) {
-        var lastC = null, interest = false, wa = false;
+        var lastC = null, interest = false, wa = false, kw = '';
         m.forEach(function (x, j) {
-          if (!x.o) { lastC = x; if (x.text && !buttonSet[x.text] && INT_RE.test(x.text)) interest = true; if (PHONE_RE.test(x.text)) wa = true; }
+          if (!x.o) { lastC = x; if (x.text && !buttonSet[x.text] && INT_RE.test(x.text)) { if (!interest) kw = INT_RE.exec(x.text)[0].toLowerCase(); interest = true; } if (PHONE_RE.test(x.text)) wa = true; }
           else if (isHuman(k[j]) && COMMIT_RE.test(x.text)) wa = true;
         });
         var bursts = 0, prev = null;
@@ -250,14 +298,28 @@
           if (x.o && isHuman(k[j]) && x.ts > lastC.ts) { if (prev === null || x.ts - prev >= SEGUIMIENTO_MS) bursts++; prev = x.ts; }
         });
         leads.push({ ts: lastC.ts, closure: !lastC.text || CLOSE_RE.test(lastC.text), interest: interest, wa: wa, bursts: bursts });
+        var closure = !lastC.text || CLOSE_RE.test(lastC.text);
+        L = { interest: interest, kw: kw, bursts: bursts, opp: interest && refTs - lastC.ts >= SILENCIO_MS && !closure && !wa && bursts <= 1 };
       }
+      var row = emptyRow();
+      row.contacto = ch.name; row._ts = m[0].ts;
+      row.msgsCliente = m.filter(function (x) { return !x.o; }).length;
+      row.msgsTuyos = m.filter(function (x, j) { return x.o && isHuman(k[j]); }).length;
+      row.ultimaFecha = fmtDT(last.ts); row.ultimoDe = !last.o ? 'Cliente' : k[m.length - 1] === 'bot' ? 'Bot' : 'Tú';
+      if (ci >= 0) {
+        row.fecha = fmtDT(m[ci].ts);
+        row.primerMsg = m[ci].text ? cut(m[ci].text, 80) : '(foto, audio o sticker)';
+        row.interes = L.interest ? 'Sí: ' + L.kw : 'No';
+        row.seguimientos = L.bursts; row.oportunidad = L.opp ? 'Sí' : 'No';
+      }
+      rows.push(row);
 
       if (humanFirst) { // la abrio una persona (texto personalizado, respuesta privada a comentario): no es un lead entrante
-        skippedOwnerFirst++; origins.tu.n++;
+        row.origen = ORIGEN.tu; skippedOwnerFirst++; origins.tu.n++;
         if (ci >= 0) origins.tu.replied++;
         return;
       }
-      if (ci < 0) { botOnly++; return; } // solo hablo la plantilla; el cliente nunca escribio
+      if (ci < 0) { botOnly++; rows.pop(); return; } // solo hablo la plantilla; el cliente nunca escribio
       analyzed++;
       totalMessages += m.length;
       var t0 = m[ci].ts, first = m[0];
@@ -267,11 +329,13 @@
       fr.total++;
 
       var origin;
-      if (ch.adLine || k[0] === 'bot' || buttonSet[m[ci].text]) origin = origins.pauta;
+      if (ch.adLine || k[0] === 'bot' || buttonSet[m[ci].text]) { origin = origins.pauta; row.origen = ORIGEN.pauta; }
       else {
         origin = origins.organico;
-        origin[m[ci].share === 'story' ? 'story' : m[ci].share === 'post' ? 'post' : 'directo']++;
+        var sub = m[ci].share === 'story' ? 'story' : m[ci].share === 'post' ? 'post' : 'directo';
+        origin[sub]++; row.origen = ORIGEN[sub];
       }
+      row.franja = fr.label;
       origin.n++;
 
       var hIdx = -1, bIdx = -1, aIdx = -1;
@@ -282,23 +346,28 @@
         if (hIdx < 0 && isHuman(k[i])) hIdx = i;
         if (hIdx >= 0 && bIdx >= 0) break;
       }
+      row.bot = bIdx >= 0 ? 'Sí' : 'No';
       if (bIdx >= 0) { chatsWithBot++; botSecs.push((m[bIdx].ts - t0) / 1000); }
       if (aIdx >= 0) anyMins.push((m[aIdx].ts - t0) / 60000);
-      if (hIdx < 0) { unanswered++; fr.unanswered++; origin.unanswered++; return; }
+      if (hIdx < 0) { row.tramo = 'Sin respuesta'; unanswered++; fr.unanswered++; origin.unanswered++; return; }
       var reply = m[hIdx];
       var min = (reply.ts - t0) / 60000;
+      row.minutos = Math.round(min * 10) / 10;
       times.push(min); fr.times.push(min); origin.times.push(min);
       // "continuo" = el cliente volvio a escribir DESPUES de tu primera respuesta humana
       var cont = false;
       for (var q = hIdx + 1; q < m.length; q++) {
         if (!m[q].o && m[q].ts > reply.ts) { cont = true; break; }
       }
+      row.siguio = cont ? 'Sí' : 'No';
       if (cont) { continued++; origin.continued++; }
       for (var j2 = 0; j2 < TRAMOS.length; j2++) {
-        if (min < TRAMOS[j2].max) { tramos[j2].count++; if (cont) tramos[j2].continued++; break; }
+        if (min < TRAMOS[j2].max) { row.tramo = TRAMOS[j2].label; tramos[j2].count++; if (cont) tramos[j2].continued++; break; }
       }
     });
 
+    rows.sort(function (a, b) { return a._ts - b._ts; });
+    rows.forEach(function (r) { delete r._ts; });
     var answered = times.length;
     franjas.forEach(function (f) {
       f.mean = mean(f.times); f.median = median(f.times); f.answered = f.times.length;
@@ -358,7 +427,7 @@
       totalMessages: totalMessages, dateFrom: dateFrom, dateTo: dateTo,
       pendingRequests: pendingRequests, skippedChannels: skippedChannels, ownerMsgs: ownerMsgs, totalConvs: convs.length,
       skippedGroups: skippedGroups, skippedOwnerFirst: skippedOwnerFirst, botOnly: botOnly,
-      bot: bot, origins: origins,
+      bot: bot, origins: origins, rows: rows,
       opps: { count: opps, interested: interested, refTs: refTs }
     };
   }
@@ -488,6 +557,6 @@
   return {
     fixText: fixText, parseConversation: parseConversation, buildConversations: buildConversations,
     detectOwner: detectOwner, detectBots: detectBots, analyze: analyze, fmtDuration: fmtDuration, fmtSeconds: fmtSeconds, fmtDate: fmtDate, collectFromZip: collectFromZip, blobReader: blobReader,
-    TRAMOS: TRAMOS, FRANJAS: FRANJAS, MIN_N: MIN_N
+    TRAMOS: TRAMOS, FRANJAS: FRANJAS, COLUMNS: COLUMNS, ORIGEN: ORIGEN, fmtDT: fmtDT, MIN_N: MIN_N
   };
 });

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>¿Cuánto demoras en responder a tus clientes?</title>
 <meta name="description" content="Auditor gratuito: descubre cuánto demoras en responder los chats de Instagram de tu negocio. Tus chats no salen de tu computadora.">
-<link rel="stylesheet" href="styles.css?v=6">
+<link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
 <div class="wrap">
@@ -82,6 +82,13 @@
     <h2>Oportunidades que se quedaron en el camino</h2>
     <div class="card" id="oportunidades"></div>
 
+    <h2>¿Dudas de un número? Cuéntalo tú mismo</h2>
+    <div class="card" id="export-box">
+      <p class="lead-note" style="margin:0 0 12px">Descarga el Excel con <b>una fila por conversación</b>: contacto, de dónde llegó (anuncio u orgánico), cuánto demoraste, si siguió la conversación, si había interés… Fíltralo y cuenta tú mismo cuántos vienen de pauta, cuántos de orgánico y todo lo demás. Trae una hoja “Resumen” con cada conteo como fórmula, para comprobar el reporte.</p>
+      <button class="btn" type="button" id="export-btn">Descargar el Excel con tus datos</button>
+      <p class="note" style="margin:10px 0 0" id="export-msg">🔒 El archivo se genera en tu computadora y no viaja a ningún servidor. Contiene los nombres de tus clientes: es tu información, guárdalo donde quieras.</p>
+    </div>
+
     <div class="bench" style="margin-top:22px">
       <h3>Por qué importa la velocidad</h3>
       <p style="margin:0">Caso real: en mi negocio analizamos <b>399 conversaciones de WhatsApp</b> del equipo de ventas de Mono Kids. Esto pasó con los leads según lo rápido que respondimos:</p>
@@ -109,8 +116,9 @@
   <footer>Hecho por Andrés Requena · Todo se calcula en tu navegador; no guardamos tus chats.</footer>
 </div>
 
-<script src="analyzer.js?v=6"></script>
-<script src="sample-data.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="analyzer.js?v=7"></script>
+<script src="exporter.js?v=7"></script>
+<script src="sample-data.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>
