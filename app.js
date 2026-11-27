@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   var A = window.Auditor, $ = function (id) { return document.getElementById(id); };
-  var state = { convs: null, detect: null, failed: 0 };
+  var state = { convs: null, detect: null, failed: 0, cands: [], botKeys: null, ownerOpen: false, owner: null };
 
   function status(msg, err) { var s = $('status'); s.textContent = msg || ''; s.className = err ? 'err' : ''; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -67,29 +67,44 @@
     if (!convs.length) { status('No encontré conversaciones. Busca el archivo message_1.json dentro de messages/inbox/ (o sube el ZIP completo en formato JSON, no HTML).', true); return; }
     state.convs = convs;
     state.detect = A.detectOwner(convs);
-    renderOwner(state.detect.owner);
-    run(state.detect.owner);
+    state.ownerOpen = false;
+    setOwner(state.detect.owner, true);
+  }
+
+  // Cambia de cuenta: re-detecta los mensajes automaticos de esa cuenta y recalcula.
+  function setOwner(owner, scroll) {
+    state.owner = owner;
+    state.cands = A.detectBots(state.convs, owner).candidates;
+    state.botKeys = null; // todos los detectados, hasta que el dueno desmarque alguno
+    renderOwner(owner);
+    run(owner, scroll);
   }
 
   function renderOwner(owner) {
     var d = state.detect, box = $('owner-box');
     box.style.display = 'block';
+    // Si tu cuenta aparece en casi todas las conversaciones, no hace falta preguntar.
+    if (!state.ownerOpen && !d.ambiguous && d.share >= 0.9) {
+      box.innerHTML = 'Analizando la cuenta <b>' + esc(owner) + '</b>. <a href="#" id="owner-change" class="small-link">¿No es tu cuenta?</a>';
+      $('owner-change').onclick = function (e) { e.preventDefault(); state.ownerOpen = true; renderOwner(owner); };
+      return;
+    }
     box.innerHTML = 'Estoy analizando como tu cuenta a <b>' + esc(owner) + '</b> (aparece en ' + d.count[owner] + ' de las ' + d.total + ' conversaciones). ' +
       (d.ambiguous ? '<b>Dos cuentas empatan, confírmala:</b> ' : '¿Es otra? Elígela: ') +
       '<select id="owner-sel" aria-label="Elige tu cuenta">' + d.candidates.map(function (n) {
         return '<option value="' + esc(n) + '"' + (n === owner ? ' selected' : '') + '>' + esc(n) + ' (en ' + d.count[n] + (d.count[n] === 1 ? ' conversación' : ' conversaciones') + ')</option>';
       }).join('') + '</select>';
-    $('owner-sel').onchange = function () { renderOwner(this.value); run(this.value); };
+    $('owner-sel').onchange = function () { setOwner(this.value, true); };
   }
 
-  function run(owner) {
-    var r = A.analyze(state.convs, owner);
+  function run(owner, scroll) {
+    var r = A.analyze(state.convs, owner, { candidates: state.cands, botKeys: state.botKeys });
     var warn = '';
     if (state.failed) warn += ' ⚠️ No pude leer ' + state.failed + ' archivos (si la carpeta está en iCloud/Drive, descárgala completa primero o sube el ZIP).';
     if (!r.ownerMsgs) { status('No encontré ningún mensaje tuyo. ¿Subiste la carpeta inbox completa (o el ZIP) y elegiste tu cuenta correcta?' + warn, true); return; }
     if (!r.analyzed) { status('No hay conversaciones iniciadas por clientes para analizar con "' + owner + '" como tu cuenta.', true); return; }
     status('Listo. Esto se calculó en tu computadora.' + warn, !!warn);
-    render(r);
+    render(r, scroll);
   }
 
   // opts: {bad, small, hl}. 'small' = muestra chica (atenuada, pero visible)
@@ -100,27 +115,107 @@
   }
   function chats(n) { return n + (n === 1 ? ' chat' : ' chats'); }
 
-  function render(r) {
-    var rango = r.dateFrom !== null ? ', del ' + A.fmtDate(r.dateFrom) + ' al ' + A.fmtDate(r.dateTo) : '';
-    $('scope').textContent = 'Analicé ' + r.analyzed + ' conversaciones iniciadas por clientes (' + r.totalMessages.toLocaleString('es-PE') + ' mensajes en total' + rango + ')' +
-      (r.skippedGroups ? ', omití ' + r.skippedGroups + ' grupos' : '') +
-      (r.skippedOwnerFirst ? ' y ' + r.skippedOwnerFirst + ' que iniciaste tú' : '') + '.' +
-      (r.pendingRequests ? ' Aparte ' + (r.pendingRequests === 1 ? 'hay 1 solicitud de mensaje' : 'hay ' + r.pendingRequests + ' solicitudes de mensaje') + ' sin aceptar (no cuentan aquí; son personas que te escribieron y ni siquiera abriste).' : '') +
-      ' 🔒 Esto se calculó en tu computadora.';
+  function pct(x) { return Math.round(x) + '%'; }
 
+  function renderBot(r) {
+    var b = r.bot, box = $('bot-box'), wrap = $('bot-section');
+    if (!b.detected) { wrap.style.display = 'none'; box.innerHTML = ''; return; } // cuentas sin automatizacion: ni se menciona
+    wrap.style.display = 'block';
+    var html = '';
+    if (b.active) {
+      html += '<div class="vs"><div class="vs-a"><b>' + A.fmtSeconds(b.medianSec) + '</b><span>en lo que responde tu bot</span></div>' +
+        '<div class="vs-x">vs</div>' +
+        '<div class="vs-b"><b>' + A.fmtDuration(r.medianMin) + '</b><span>en lo que responde una persona</span></div></div>' +
+        '<p class="lead-note">Tu bot responde en <b>' + A.fmtSeconds(b.medianSec) + '</b>, pero eso no es atención: el cliente recibe un menú, no a alguien que lo ayude. ' +
+        'El bot intervino en <b>' + b.chatsWithBot.toLocaleString('es-PE') + ' de ' + r.analyzed.toLocaleString('es-PE') + ' chats</b> (' + pct(b.chatsWithBotPct) + '). ' +
+        (b.medianWithBotMin !== null ? 'Si lo cuentas como respuesta, tu mediana parece de <b>' + A.fmtDuration(b.medianWithBotMin) + '</b>; la real, la de una persona, es <b>' + A.fmtDuration(r.medianMin) + '</b>.' : '') + '</p>';
+    }
+    html += '<p class="note" style="margin:' + (b.active ? '14px' : '0') + ' 0 8px">Detecté <b>' + b.candidates.length + (b.candidates.length === 1 ? ' mensaje automático' : ' mensajes automáticos') + '</b> en tu cuenta: textos que repites idénticos en 10 chats o más y que salen en segundos tras el mensaje del cliente. Cada cuenta es distinta: <b>desmarca los que en realidad escribe una persona</b> y recalculo al toque.</p><ul class="botlist">';
+    b.candidates.forEach(function (c, i) {
+      html += '<li><label><input type="checkbox" data-i="' + i + '"' + (c.on ? ' checked' : '') + '><span class="bt">' + esc(c.text) + '</span><small>en ' + c.chats + ' chats</small></label></li>';
+    });
+    html += '</ul><p class="note" style="margin:8px 0 0">La tarjeta del anuncio que acompaña al saludo automático también cuenta como automática.</p>';
+    box.innerHTML = html;
+    Array.prototype.forEach.call(box.querySelectorAll('input[type=checkbox]'), function (cb) {
+      cb.onchange = function () {
+        state.botKeys = Array.prototype.filter.call(box.querySelectorAll('input[type=checkbox]'), function (x) { return x.checked; })
+          .map(function (x) { return r.bot.candidates[+x.getAttribute('data-i')].key; });
+        run(state.owner, false);
+      };
+    });
+  }
+
+  function renderOrigenes(r) {
+    var o = r.origins, rows = [], wrap = $('origen-section');
+    function row(title, sub, d, extra) {
+      return '<div class="origin"><div class="oh"><b>' + title + '</b><span>' + sub + '</span></div><div class="ogrid">' +
+        '<div><b>' + d.n.toLocaleString('es-PE') + '</b><span>' + (extra && extra.l1 || 'llegaron') + '</span></div>' +
+        '<div><b>' + (d.answeredPct === null || d.answeredPct === undefined ? '—' : pct(d.answeredPct)) + '</b><span>' + (d.answered !== undefined ? d.answered.toLocaleString('es-PE') + ' con respuesta de una persona' : 'a los que respondió una persona') + '</span></div>' +
+        '<div><b>' + (d.continuedPct === null || d.continuedPct === undefined ? '—' : pct(d.continuedPct)) + '</b><span>siguieron la conversación</span></div>' +
+        '<div><b>' + (d.median === null || d.median === undefined ? '—' : A.fmtDuration(d.median)) + '</b><span>mediana de espera a una persona</span></div></div></div>';
+    }
+    var subOrg = [];
+    if (o.organico.directo) subOrg.push(o.organico.directo + ' directos');
+    if (o.organico.story) subOrg.push(o.organico.story + ' desde una story');
+    if (o.organico.post) subOrg.push(o.organico.post + ' desde un post compartido');
+    if (o.pauta.n) rows.push(row('Anuncios (pauta)', pct(o.pauta.pct) + ' de tus leads · chats que abren desde un anuncio', o.pauta));
+    if (o.organico.n) rows.push(row('Orgánico', pct(o.organico.pct) + ' de tus leads · ' + (subOrg.join(', ') || 'te escribieron por su cuenta'), o.organico));
+    if (o.tu.n) rows.push('<div class="origin"><div class="oh"><b>Tú escribiste primero</b><span>respuestas a comentarios y mensajes personalizados</span></div><div class="ogrid">' +
+      '<div><b>' + o.tu.n.toLocaleString('es-PE') + '</b><span>chats que abriste tú</span></div>' +
+      '<div><b>' + (o.tu.repliedPct === null ? '—' : pct(o.tu.repliedPct)) + '</b><span>' + o.tu.replied.toLocaleString('es-PE') + ' contestaron</span></div>' +
+      '<div><b>—</b><span>no se mide espera: escribiste tú</span></div><div><b>—</b><span></span></div></div></div>');
+    // lectura automatica
+    var read = '';
+    if (o.pauta.n && o.organico.n && o.pauta.median !== null) {
+      read = 'El <b>' + pct(o.pauta.pct) + '</b> de tus leads viene de pauta y espera una mediana de <b>' + A.fmtDuration(o.pauta.median) + '</b> a una persona' +
+        (o.organico.median !== null ? ' (los orgánicos, <b>' + A.fmtDuration(o.organico.median) + '</b>)' : '') + '.' +
+        (o.pauta.continuedPct !== null && o.organico.continuedPct !== null && o.pauta.continuedPct < o.organico.continuedPct - 3 ? ' Y de los de pauta sigue la conversación el <b>' + pct(o.pauta.continuedPct) + '</b>, contra <b>' + pct(o.organico.continuedPct) + '</b> en los orgánicos.' : '');
+    } else if (o.pauta.n && o.pauta.median !== null) {
+      read = 'El <b>' + pct(o.pauta.pct) + '</b> de tus leads viene de pauta y espera una mediana de <b>' + A.fmtDuration(o.pauta.median) + '</b> a una persona.';
+    } else if (o.organico.n && o.organico.median !== null) {
+      read = 'Todos tus leads llegan de forma orgánica y esperan una mediana de <b>' + A.fmtDuration(o.organico.median) + '</b> a una persona.';
+    }
+    wrap.style.display = rows.length ? 'block' : 'none';
+    $('origen').innerHTML = (read ? '<div class="worst">' + read + '</div>' : '') + rows.join('') +
+      '<p class="note">Pauta = el chat trae la línea “replied to an ad”, abre con la tarjeta del anuncio o el primer mensaje es un botón del anuncio. Orgánico = el cliente escribió de la nada, por una story o con un post compartido.</p>';
+  }
+
+  function renderOportunidades(r) {
+    var n = r.opps.count;
+    $('oportunidades').innerHTML = n > 0
+      ? '<div class="opp"><b>' + n.toLocaleString('es-PE') + '</b><span>leads con señal de interés (precio, medidas, disponible, “quiero”, catálogo, cotización…) se quedaron sin ningún seguimiento tuyo.</span></div>' +
+        '<p class="lead-note" style="margin:12px 0 4px">La lista con nombres y el mensaje sugerido para cada uno es parte del método. <a class="small-link" href="#cta-hotmart">Ver cómo funciona</a></p>'
+      : '<p class="lead-note" style="margin:0">No encontré leads con señal de interés que se hayan quedado sin seguimiento. Buen trabajo.</p>';
+    $('oportunidades').innerHTML += '<p class="note" style="margin:6px 0 0">Cuento los chats donde el cliente preguntó por algo concreto y dejó de escribir hace 14 días o más, sin despedirse ni pasar a WhatsApp, y tú no volviste a escribirle pasadas 12 horas de su último mensaje.</p>';
+  }
+
+  function render(r, scroll) {
+    var rango = r.dateFrom !== null ? ', del ' + A.fmtDate(r.dateFrom) + ' al ' + A.fmtDate(r.dateTo) : '';
+    $('scope').textContent = 'Analicé ' + r.analyzed.toLocaleString('es-PE') + ' conversaciones de clientes (' + r.totalMessages.toLocaleString('es-PE') + ' mensajes en total' + rango + ')' +
+      (r.skippedGroups ? ', omití ' + r.skippedGroups + ' grupos' : '') +
+      (r.skippedOwnerFirst ? (r.skippedGroups ? ' y ' : ', omití ') + r.skippedOwnerFirst.toLocaleString('es-PE') + ' que abriste tú con un mensaje personalizado' : '') + '.' +
+      (r.pendingRequests ? ' Aparte ' + (r.pendingRequests === 1 ? 'hay 1 solicitud de mensaje' : 'hay ' + r.pendingRequests + ' solicitudes de mensaje') + ' sin aceptar (no cuentan aquí; son personas que te escribieron y ni siquiera abriste).' : '') +
+      ' 🔒 Esto se calculó en tu computadora.' +
+      (r.bot.active ? ' Los tiempos son de la primera respuesta de una persona: el bot y las líneas de sistema de Meta no cuentan.' : '');
+
+    var hum = r.bot.active;
     var k = [
-      [A.fmtDuration(r.meanMin), 'Tiempo promedio de 1ª respuesta (sobre ' + chats(r.answered) + ' respondidos)'],
-      [A.fmtDuration(r.medianMin), 'Mediana (el caso típico)'],
-      [Math.round(r.unansweredPct) + '%', r.unanswered + ' de ' + chats(r.analyzed) + ' sin respuesta'],
+      [A.fmtDuration(r.meanMin), 'Tiempo promedio de 1ª respuesta' + (hum ? ' humana' : '') + ' (sobre ' + chats(r.answered) + ' respondidos)'],
+      [A.fmtDuration(r.medianMin), hum ? 'Tu mediana humana (el caso típico)' : 'Mediana (el caso típico)'],
+      [Math.round(r.unansweredPct) + '%', r.unanswered + ' de ' + chats(r.analyzed) + ' sin respuesta' + (hum ? ' de una persona' : '')],
       [r.continuedPct === null ? '—' : Math.round(r.continuedPct) + '%', r.continued + ' de ' + chats(r.answered) + ' siguieron la conversación tras tu respuesta']
     ];
-    $('kpis').innerHTML = k.map(function (x) { return '<div class="kpi"><b>' + x[0] + '</b><span>' + x[1] + '</span></div>'; }).join('');
+    $('kpis').innerHTML = k.map(function (x, i) { return '<div class="kpi' + (hum && i === 1 ? ' star' : '') + '"><b>' + x[0] + '</b><span>' + x[1] + '</span></div>'; }).join('');
+
+    renderBot(r);
+    renderOrigenes(r);
+    renderOportunidades(r);
 
     // 1. Tiempo de primera respuesta
     $('tramos').innerHTML = r.tramos.map(function (t, i) {
       return bar(t.label, t.pct, Math.round(t.pct) + '% <small>' + t.count + ' de ' + r.answered + '</small>', { bad: i >= 3 });
     }).join('') + (r.unanswered ? bar('Sin respuesta', r.unansweredPct, Math.round(r.unansweredPct) + '% <small>' + r.unanswered + ' de ' + r.analyzed + '</small>', { bad: true }) : '') +
-      '<p class="note">Porcentaje sobre los ' + r.answered + ' chats que sí respondiste (los sin respuesta, sobre los ' + r.analyzed + ' analizados).</p>';
+      '<p class="note">Porcentaje sobre los ' + r.answered + ' chats que sí respondiste' + (r.bot.active ? ' (una persona; el bot no cuenta)' : '') + ' (los sin respuesta, sobre los ' + r.analyzed + ' analizados).</p>';
 
     // 2. Curva: ¿siguieron la conversación según tu velocidad?
     var big = r.tramos.filter(function (t) { return !t.small; });
@@ -159,7 +254,7 @@
     }).join('') + '<p class="note">Mediana de la 1ª respuesta según la hora en que te escribió el cliente. Las franjas con menos de ' + A.MIN_N + ' chats respondidos salen atenuadas.</p>';
 
     var rep = $('report'); rep.style.display = 'block';
-    if (!window.__NO_SCROLL) rep.scrollIntoView({ behavior: 'smooth' });
+    if (scroll !== false && !window.__NO_SCROLL) rep.scrollIntoView({ behavior: 'smooth' });
   }
 
   // Eventos de carga

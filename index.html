@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>¿Cuánto demoras en responder a tus clientes?</title>
 <meta name="description" content="Auditor gratuito: descubre cuánto demoras en responder los chats de Instagram de tu negocio. Tus chats no salen de tu computadora.">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
 <div class="wrap">
@@ -57,6 +57,16 @@
     <p class="note" id="scope"></p>
     <div class="kpis" id="kpis"></div>
 
+    <div id="bot-section" style="display:none">
+      <h2>Tu bot no cuenta como atención</h2>
+      <div class="card" id="bot-box"></div>
+    </div>
+
+    <div id="origen-section" style="display:none">
+      <h2>¿De dónde vienen tus leads y cómo los atiendes?</h2>
+      <div class="card" id="origen"></div>
+    </div>
+
     <h2>¿En cuánto tiempo respondes?</h2>
     <div class="card" id="tramos"></div>
 
@@ -68,6 +78,9 @@
 
     <h2>¿A qué hora demoras más en responder?</h2>
     <div class="card" id="horas-demoras"></div>
+
+    <h2>Oportunidades que se quedaron en el camino</h2>
+    <div class="card" id="oportunidades"></div>
 
     <div class="bench" style="margin-top:22px">
       <h3>Por qué importa la velocidad</h3>
@@ -96,8 +109,8 @@
   <footer>Hecho por Andrés Requena · Todo se calcula en tu navegador; no guardamos tus chats.</footer>
 </div>
 
-<script src="analyzer.js?v=4"></script>
-<script src="sample-data.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="analyzer.js?v=5"></script>
+<script src="sample-data.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

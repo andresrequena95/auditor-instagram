@@ -65,3 +65,34 @@ form.mail input{flex:1 1 220px;padding:13px 14px;border-radius:999px;border:1.5p
 footer{padding:36px 0 48px;text-align:center;font-size:13px;color:var(--marron2)}
 @media(min-width:640px){.kpis{grid-template-columns:repeat(4,1fr)}.bar{grid-template-columns:160px 1fr 112px}}
 .bench .cols span b{display:inline;font:inherit;color:inherit;font-weight:700}
+
+/* v5: bot vs humano, origen del lead, oportunidades */
+.kpi.star{background:var(--marron);border-color:var(--marron)}
+.kpi.star b{color:var(--crema)}
+.kpi.star span{color:var(--crema);opacity:.9}
+.small-link{font-size:13px;color:var(--clay-deep)}
+.vs{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;text-align:center;margin-bottom:12px}
+.vs b{display:block;font-family:'Tiempos Headline',Georgia,serif;font-size:clamp(24px,6vw,36px);line-height:1.1}
+.vs span{font-size:13px;color:var(--marron2)}
+.vs-a{background:var(--crema2);border-radius:12px;padding:14px 8px}
+.vs-a b{color:var(--marron2)}
+.vs-b{background:var(--marron);border-radius:12px;padding:14px 8px}
+.vs-b b{color:var(--dorado)}
+.vs-b span{color:var(--crema)}
+.vs-x{font-size:13px;font-weight:700;color:var(--clay-deep);text-transform:uppercase}
+.lead-note{font-size:16px;margin:0}
+.botlist{list-style:none;margin:0;padding:0}
+.botlist li{border-top:1px solid var(--crema2);padding:8px 0}
+.botlist label{display:grid;grid-template-columns:20px 1fr auto;gap:10px;align-items:start;cursor:pointer;font-size:15px}
+.botlist input{margin-top:4px;width:18px;height:18px;accent-color:var(--marron)}
+.botlist small{color:var(--marron2);white-space:nowrap}
+.origin{border:1px solid var(--crema2);border-radius:12px;padding:14px;margin:12px 0}
+.origin .oh{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
+.origin .oh span{font-size:13px;color:var(--marron2)}
+.ogrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ogrid b{display:block;font-family:'Tiempos Headline',Georgia,serif;font-size:24px;color:var(--clay-deep);line-height:1.15}
+.ogrid span{font-size:12px;color:var(--marron2)}
+.opp{display:flex;gap:14px;align-items:center}
+.opp b{font-family:'Tiempos Headline',Georgia,serif;font-size:clamp(36px,10vw,52px);color:var(--clay-deep);line-height:1}
+.opp span{font-size:17px}
+@media(min-width:640px){.ogrid{grid-template-columns:repeat(4,1fr)}}

@@ -42,7 +42,13 @@
     var msgs = [];
     json.messages.forEach(function (m) {
       if (!m || typeof m.timestamp_ms !== 'number' || !m.sender_name) return;
-      msgs.push({ sender: fixText(m.sender_name), ts: m.timestamp_ms, content: fixText(m.content || '') });
+      var share = '';
+      if (m.share) {
+        var lk = String(m.share.link || '');
+        share = /\/stories\//.test(lk) ? 'story' : /instagram\.com\/(p|reel|reels|tv)\//.test(lk) ? 'post' : lk ? 'otro' : 'otro';
+      }
+      var media = !!(m.photos || m.videos || m.audio_files || m.sticker || m.share);
+      msgs.push({ sender: fixText(m.sender_name), ts: m.timestamp_ms, content: fixText(m.content || ''), media: media, share: share });
     });
     msgs.sort(function (a, b) { return a.ts - b.ts; }); // el export viene del mas nuevo al mas viejo
     return { title: fixText(json.title || ''), participants: participants, messages: msgs };
@@ -83,7 +89,7 @@
     });
     var arr = Object.keys(count).sort(function (a, b) { return count[b] - count[a] || (a < b ? -1 : 1); });
     var ambiguous = arr.length > 1 && count[arr[0]] === count[arr[1]];
-    return { owner: arr[0] || null, ambiguous: ambiguous, candidates: arr.slice(0, 10), count: count, total: convs.length };
+    return { owner: arr[0] || null, ambiguous: ambiguous, share: arr.length && convs.length ? count[arr[0]] / convs.length : 0, candidates: arr.slice(0, 10), count: count, total: convs.length };
   }
 
   function median(a) {
@@ -93,49 +99,203 @@
   }
   function mean(a) { return a.length ? a.reduce(function (x, y) { return x + y; }, 0) / a.length : null; }
 
+  // ---------- Limpieza y clasificacion de mensajes ----------
+  var BOT_MIN_CHATS = 10;      // un texto del dueno identico en >=10 chats...
+  var BOT_FAST_MS = 30000;     // ...que llega <30 s despues de un mensaje del cliente...
+  var BOT_FAST_RATIO = 0.8;    // ...en >=80% de los casos, es automatico.
+  var BTN_RATIO = 0.5;         // boton del anuncio: el bot le responde en >=50% de los chats donde es el 1er mensaje
+  var SEGUIMIENTO_MS = 12 * 3600000, SILENCIO_MS = 14 * 86400000;
+
+  // Lineas de sistema de Meta: vienen como mensajes del dueno ("X replied to an ad", asignaciones...). No son respuesta ni mensaje del cliente.
+  var SYS_RE = /(assigned this conversation|replied to an ad|can.?t receive your message|can.?t reply to this conversation|started an? (audio|video) (call|chat)|missed an? (audio|video) (call|chat)|asign[oó] (esta|la) conversaci[oó]n|respondi[oó] a un anuncio|no puede recibir (tu|tus) mensaje)/i;
+  var AD_RE = /(replied to an ad|respondi[oó] a un anuncio)/i;
+  var LIKE_RE = /^(liked a message|le gust[oó] un mensaje|reacted .+ to a message|reaccion[oó] .+)$/i;
+  var ATT_RE = /^(enviaste un archivo adjunto|you sent an attachment)/i;
+  var PRIV_RE = /^(enviaste una respuesta privada|you sent a private reply)/i;
+  var CLOSE_RE = /^(gracias|muchas gracias|mil gracias|ok|okey|okay|oki|listo|perfecto|genial|dale|vale|super|súper|excelente|buenísimo|👍|🙏|❤️|🤍|igualmente|hasta luego|chau|bye|entendido|claro|sí|si|sii|no gracias)[\s!.,😊🤍🙏❤️👍🙌🥰]*$/i;
+  var INT_RE = /precio|cu[aá]nto|costo|cuesta|valor|medida|disponib|stock|\bquiero\b|cat[aá]logo|delivery|env[ií]o|enviar|despacho|cotiza|comprar|colores|color\b|showroom|ubicaci|direcci[oó]n|entrega|plazo/i;
+  var PHONE_RE = /(\+?51[\s-]?)?\b9\d{2}[\s-]?\d{3}[\s-]?\d{3}\b/;
+  var COMMIT_RE = /ahi te escribo|ahí te escribo|te contacto de este tel|te escribo por whatsapp|te escribo al/i;
+
+  function norm(t) { return String(t || '').replace(/\s+/g, ' ').trim(); }
+  function shortText(t, n) {
+    var w = t.split(' ');
+    return w.length > n ? w.slice(0, n).join(' ') + '…' : t;
+  }
+  function isMediaMsg(x) { return x.o && (!x.text || ATT_RE.test(x.text)); }
+
+  // Mensajes limpios de una conversacion (sin lineas de sistema ni "me gusta"), cacheados por dueno.
+  function prep(c, owner) {
+    if (c._p && c._p.owner === owner) return c._p;
+    var msgs = [], adLine = false;
+    c.messages.forEach(function (m) {
+      var text = norm(m.content), isOwner = m.sender === owner;
+      if (SYS_RE.test(text)) { if (AD_RE.test(text)) adLine = true; return; }
+      if (LIKE_RE.test(text)) return;
+      msgs.push({ o: isOwner, ts: m.ts, text: text, media: !!m.media, share: m.share || '' });
+    });
+    c._p = { owner: owner, msgs: msgs, adLine: adLine };
+    return c._p;
+  }
+
+  // Textos automaticos del propio visitante: lista de candidatos para que el dueno confirme.
+  function detectBots(convs, owner) {
+    var st = Object.create(null);
+    convs.forEach(function (c, ci) {
+      if (c.source === 'broadcast') return;
+      var m = prep(c, owner).msgs;
+      for (var i = 0; i < m.length; i++) {
+        var x = m[i];
+        if (!x.o || !x.text || ATT_RE.test(x.text) || PRIV_RE.test(x.text)) continue;
+        var s = st[x.text] || (st[x.text] = { chats: 0, last: -1, occ: 0, trig: 0, fast: 0 });
+        if (s.last !== ci) { s.chats++; s.last = ci; }
+        s.occ++;
+        var p = i > 0 ? m[i - 1] : null;
+        // disparador: mensaje del cliente, o la tarjeta de plantilla (adjunto del dueno) al abrir el chat
+        if (p && (!p.o || (i === 1 && isMediaMsg(p)))) { s.trig++; if (x.ts - p.ts < BOT_FAST_MS) s.fast++; }
+      }
+    });
+    var candidates = [];
+    Object.keys(st).forEach(function (k) {
+      var s = st[k];
+      if (s.chats >= BOT_MIN_CHATS && s.trig >= BOT_MIN_CHATS && s.fast / s.trig >= BOT_FAST_RATIO) {
+        candidates.push({ key: k, text: shortText(k, 12), chats: s.chats, fastPct: s.fast / s.trig * 100 });
+      }
+    });
+    candidates.sort(function (a, b) { return b.chats - a.chats || (a.key < b.key ? -1 : 1); });
+    return { candidates: candidates };
+  }
+
+  // Tipo de cada mensaje: C cliente · sys n/a (ya filtrado) · bot · priv (respuesta privada a comentario) · media · hum
+  function classify(msgs, botSet) {
+    var k = msgs.map(function (x) {
+      if (!x.o) return 'C';
+      if (x.text && botSet[x.text]) return 'bot';
+      if (PRIV_RE.test(x.text)) return 'priv';
+      if (isMediaMsg(x)) return 'media';
+      return 'hum';
+    });
+    // la tarjeta del anuncio (adjunto del dueno al abrir el chat) seguida del saludo automatico tambien es automatica
+    if (k.length > 1 && k[0] === 'media' && k[1] === 'bot' && msgs[1].ts - msgs[0].ts < BOT_FAST_MS) k[0] = 'bot';
+    return k;
+  }
+  function isHuman(kind) { return kind === 'hum' || kind === 'priv' || kind === 'media'; }
+
   function analyze(convs, owner, opts) {
     opts = opts || {};
     var hourOf = opts.hourOf || function (ts) { return new Date(ts).getHours(); };
-    var pendingRequests = 0, skippedChannels = 0, ownerMsgs = 0;
-    var times = [], unanswered = 0, analyzed = 0, skippedGroups = 0, skippedOwnerFirst = 0;
+    var candidates = opts.candidates || detectBots(convs, owner).candidates;
+    var keys = opts.botKeys || candidates.map(function (c) { return c.key; });
+    var botSet = Object.create(null);
+    keys.forEach(function (k) { botSet[k] = 1; });
+
+    var pendingRequests = 0, skippedChannels = 0, ownerMsgs = 0, refTs = 0;
+    var times = [], unanswered = 0, analyzed = 0, skippedGroups = 0, skippedOwnerFirst = 0, botOnly = 0;
     var continued = 0, totalMessages = 0, dateFrom = null, dateTo = null;
     var tramos = TRAMOS.map(function (t) { return { id: t.id, label: t.label, count: 0, continued: 0 }; });
     var franjas = FRANJAS.map(function (f) { return { id: f.id, short: f.short, label: f.label, times: [], unanswered: 0, total: 0 }; });
+    function newOrigin() { return { n: 0, times: [], unanswered: 0, continued: 0, directo: 0, story: 0, post: 0 }; }
+    var origins = { pauta: newOrigin(), organico: newOrigin(), tu: { n: 0, replied: 0 } };
+    var botSecs = [], anyMins = [], chatsWithBot = 0;
+    var leads = []; // para el conteo de oportunidades
+    var pre = [];   // chats comparables, para detectar los botones del anuncio
 
     convs.forEach(function (c) {
       c.messages.forEach(function (m) { if (m.sender === owner) ownerMsgs++; });
+      if (c.messages.length && c.messages[c.messages.length - 1].ts > refTs) refTs = c.messages[c.messages.length - 1].ts;
+    });
+
+    // Pasada 1: filtros por tipo de conversacion y clasificacion
+    convs.forEach(function (c) {
       // Solicitudes de mensaje sin aceptar y canales de difusion no cuentan como "chats atendidos"
       if (c.source === 'message_requests') { pendingRequests++; return; }
       if (c.source === 'broadcast') { skippedChannels++; return; }
       var others = {};
       c.messages.forEach(function (m) { if (m.sender !== owner) others[m.sender] = 1; });
       if (Object.keys(others).length > 1 || c.participants.length > 2) { skippedGroups++; return; }
-      if (!c.messages.length) return;
-      var first = c.messages[0];
-      if (first.sender === owner) { skippedOwnerFirst++; return; } // la inicio el dueno, no un tercero
+      var p = prep(c, owner);
+      if (!p.msgs.length) return;
+      pre.push({ msgs: p.msgs, adLine: p.adLine, k: classify(p.msgs, botSet) });
+    });
+
+    // Botones del anuncio: primer mensaje del cliente (en >=10 chats) al que el bot responde en segundos
+    var btn = Object.create(null), buttonSet = Object.create(null);
+    pre.forEach(function (ch) {
+      var ci = -1, i;
+      for (i = 0; i < ch.msgs.length; i++) if (!ch.msgs[i].o) { ci = i; break; }
+      if (ci < 0 || !ch.msgs[ci].text) return;
+      var b = btn[ch.msgs[ci].text] || (btn[ch.msgs[ci].text] = { n: 0, bot: 0 });
+      b.n++;
+      var nx = ch.msgs[ci + 1];
+      if (nx && nx.o && ch.k[ci + 1] === 'bot' && nx.ts - ch.msgs[ci].ts < BOT_FAST_MS) b.bot++;
+    });
+    Object.keys(btn).forEach(function (t) { if (btn[t].n >= BOT_MIN_CHATS && btn[t].bot / btn[t].n >= BTN_RATIO) buttonSet[t] = 1; });
+
+    // Pasada 2: metricas
+    pre.forEach(function (ch) {
+      var m = ch.msgs, k = ch.k, i, ci = -1;
+      for (i = 0; i < m.length; i++) if (!m[i].o) { ci = i; break; }
+      var humanFirst = m[0].o && k[0] !== 'bot' && !ch.adLine; // con linea "replied to an ad" el cliente abrio desde un anuncio
+      var last = m[m.length - 1];
+
+      // oportunidades: sobre cualquier chat donde el cliente escribio, sin importar quien abrio
+      if (ci >= 0) {
+        var lastC = null, interest = false, wa = false;
+        m.forEach(function (x, j) {
+          if (!x.o) { lastC = x; if (x.text && !buttonSet[x.text] && INT_RE.test(x.text)) interest = true; if (PHONE_RE.test(x.text)) wa = true; }
+          else if (isHuman(k[j]) && COMMIT_RE.test(x.text)) wa = true;
+        });
+        var bursts = 0, prev = null;
+        m.forEach(function (x, j) {
+          if (x.o && isHuman(k[j]) && x.ts > lastC.ts) { if (prev === null || x.ts - prev >= SEGUIMIENTO_MS) bursts++; prev = x.ts; }
+        });
+        leads.push({ ts: lastC.ts, closure: !lastC.text || CLOSE_RE.test(lastC.text), interest: interest, wa: wa, bursts: bursts });
+      }
+
+      if (humanFirst) { // la abrio una persona (texto personalizado, respuesta privada a comentario): no es un lead entrante
+        skippedOwnerFirst++; origins.tu.n++;
+        if (ci >= 0) origins.tu.replied++;
+        return;
+      }
+      if (ci < 0) { botOnly++; return; } // solo hablo la plantilla; el cliente nunca escribio
       analyzed++;
-      totalMessages += c.messages.length;
-      var last = c.messages[c.messages.length - 1];
+      totalMessages += m.length;
+      var t0 = m[ci].ts, first = m[0];
       if (dateFrom === null || first.ts < dateFrom) dateFrom = first.ts;
       if (dateTo === null || last.ts > dateTo) dateTo = last.ts;
-      var h = hourOf(first.ts), fr = franjas[Math.min(3, Math.floor(h / 6))];
+      var h = hourOf(t0), fr = franjas[Math.min(3, Math.floor(h / 6))];
       fr.total++;
-      var replyIdx = -1;
-      for (var i = 1; i < c.messages.length; i++) {
-        if (c.messages[i].sender === owner) { replyIdx = i; break; }
+
+      var origin;
+      if (ch.adLine || k[0] === 'bot' || buttonSet[m[ci].text]) origin = origins.pauta;
+      else {
+        origin = origins.organico;
+        origin[m[ci].share === 'story' ? 'story' : m[ci].share === 'post' ? 'post' : 'directo']++;
       }
-      if (replyIdx < 0) { unanswered++; fr.unanswered++; return; }
-      var reply = c.messages[replyIdx];
-      var min = (reply.ts - first.ts) / 60000;
-      times.push(min); fr.times.push(min);
-      // "continuo" = el cliente volvio a escribir DESPUES de tu primera respuesta
+      origin.n++;
+
+      var hIdx = -1, bIdx = -1, aIdx = -1;
+      for (i = ci + 1; i < m.length; i++) {
+        if (!m[i].o) continue;
+        if (aIdx < 0) aIdx = i;
+        if (bIdx < 0 && k[i] === 'bot') bIdx = i;
+        if (hIdx < 0 && isHuman(k[i])) hIdx = i;
+        if (hIdx >= 0 && bIdx >= 0) break;
+      }
+      if (bIdx >= 0) { chatsWithBot++; botSecs.push((m[bIdx].ts - t0) / 1000); }
+      if (aIdx >= 0) anyMins.push((m[aIdx].ts - t0) / 60000);
+      if (hIdx < 0) { unanswered++; fr.unanswered++; origin.unanswered++; return; }
+      var reply = m[hIdx];
+      var min = (reply.ts - t0) / 60000;
+      times.push(min); fr.times.push(min); origin.times.push(min);
+      // "continuo" = el cliente volvio a escribir DESPUES de tu primera respuesta humana
       var cont = false;
-      for (var k = replyIdx + 1; k < c.messages.length; k++) {
-        if (c.messages[k].sender !== owner && c.messages[k].ts > reply.ts) { cont = true; break; }
+      for (var q = hIdx + 1; q < m.length; q++) {
+        if (!m[q].o && m[q].ts > reply.ts) { cont = true; break; }
       }
-      if (cont) continued++;
-      for (var j = 0; j < TRAMOS.length; j++) {
-        if (min < TRAMOS[j].max) { tramos[j].count++; if (cont) tramos[j].continued++; break; }
+      if (cont) { continued++; origin.continued++; }
+      for (var j2 = 0; j2 < TRAMOS.length; j2++) {
+        if (min < TRAMOS[j2].max) { tramos[j2].count++; if (cont) tramos[j2].continued++; break; }
       }
     });
 
@@ -161,6 +321,32 @@
       t.contPct = t.count ? t.continued / t.count * 100 : null;
       t.small = t.count < MIN_N;
     });
+    ['pauta', 'organico'].forEach(function (id) {
+      var o = origins[id];
+      o.answered = o.times.length; o.median = median(o.times);
+      o.pct = analyzed ? o.n / analyzed * 100 : 0;
+      o.answeredPct = o.n ? o.answered / o.n * 100 : null;
+      o.continuedPct = o.answered ? o.continued / o.answered * 100 : null;
+      o.small = o.n < MIN_N;
+    });
+    origins.tu.repliedPct = origins.tu.n ? origins.tu.replied / origins.tu.n * 100 : null;
+
+    // Oportunidades: leads con senal de interes, silenciosos hace >=14 dias, sin cierre, que no pasaron a WhatsApp y sin ningun seguimiento humano
+    var opps = 0, interested = 0;
+    leads.forEach(function (l) {
+      if (!l.interest) return;
+      interested++;
+      if (refTs - l.ts >= SILENCIO_MS && !l.closure && !l.wa && l.bursts <= 1) opps++;
+    });
+
+    var selected = candidates.filter(function (c) { return botSet[c.key]; });
+    var bot = {
+      detected: candidates.length > 0,            // hay candidatos: se muestra la lista para confirmar
+      active: selected.length > 0 && chatsWithBot > 0, // el bot cuenta en este reporte
+      candidates: candidates.map(function (c) { return { key: c.key, text: c.text, chats: c.chats, fastPct: c.fastPct, on: !!botSet[c.key] }; }),
+      chatsWithBot: chatsWithBot, chatsWithBotPct: analyzed ? chatsWithBot / analyzed * 100 : 0,
+      medianSec: median(botSecs), medianWithBotMin: median(anyMins)
+    };
 
     return {
       owner: owner,
@@ -171,7 +357,9 @@
       tramos: tramos, franjas: franjas, worstFranja: worst, busiestFranja: busiest,
       totalMessages: totalMessages, dateFrom: dateFrom, dateTo: dateTo,
       pendingRequests: pendingRequests, skippedChannels: skippedChannels, ownerMsgs: ownerMsgs, totalConvs: convs.length,
-      skippedGroups: skippedGroups, skippedOwnerFirst: skippedOwnerFirst
+      skippedGroups: skippedGroups, skippedOwnerFirst: skippedOwnerFirst, botOnly: botOnly,
+      bot: bot, origins: origins,
+      opps: { count: opps, interested: interested, refTs: refTs }
     };
   }
 
@@ -192,6 +380,13 @@
     }
     var d = Math.floor(min / 1440), hh = Math.round((min - d * 1440) / 60);
     return d + ' d' + (hh ? ' ' + hh + ' h' : '');
+  }
+
+  function fmtSeconds(sec) {
+    if (sec === null || sec === undefined) return '—';
+    if (sec < 1) return 'menos de 1 seg';
+    if (sec < 60) return Math.round(sec) + ' seg';
+    return fmtDuration(sec / 60);
   }
 
   // ---------- Lector de ZIP por acceso aleatorio (sin cargar el archivo entero) ----------
@@ -292,7 +487,7 @@
 
   return {
     fixText: fixText, parseConversation: parseConversation, buildConversations: buildConversations,
-    detectOwner: detectOwner, analyze: analyze, fmtDuration: fmtDuration, fmtDate: fmtDate, collectFromZip: collectFromZip, blobReader: blobReader,
+    detectOwner: detectOwner, detectBots: detectBots, analyze: analyze, fmtDuration: fmtDuration, fmtSeconds: fmtSeconds, fmtDate: fmtDate, collectFromZip: collectFromZip, blobReader: blobReader,
     TRAMOS: TRAMOS, FRANJAS: FRANJAS, MIN_N: MIN_N
   };
 });
